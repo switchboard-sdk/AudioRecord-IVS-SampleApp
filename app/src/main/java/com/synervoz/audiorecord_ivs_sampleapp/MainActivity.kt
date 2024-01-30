@@ -18,12 +18,20 @@ import com.amazonaws.ivs.broadcast.DeviceDiscovery
 import com.amazonaws.ivs.broadcast.LocalStageStream
 import com.amazonaws.ivs.broadcast.ParticipantInfo
 import com.amazonaws.ivs.broadcast.Stage
+import com.synervoz.switchboard.sdk.audiograph.AudioBuffer
+import com.synervoz.switchboard.sdk.audiograph.AudioBus
+import com.synervoz.switchboard.sdk.audiograph.AudioBusList
+import com.synervoz.switchboard.sdk.audiograph.AudioData
+import com.synervoz.switchboard.sdk.audiograph.AudioGraph
+import com.synervoz.switchboardsuperpowered.audiographnodes.EchoNode
+import com.synervoz.switchboardsuperpowered.audiographnodes.ReverbNode
 import kotlinx.coroutines.CoroutineExceptionHandler
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.nio.ByteBuffer
+import java.nio.ByteOrder
 
 
 class MainActivity : AppCompatActivity() {
@@ -38,14 +46,14 @@ class MainActivity : AppCompatActivity() {
     private lateinit var recordButton: Button
 
     // ivs
-    val TOKEN = "eyJhbGciOiJLTVMiLCJ0eXAiOiJKV1QifQ.eyJleHAiOjE3MDc4MzQzMjksImlhdCI6MTcwNjYyNDcyOSwianRpIjoiTklDSG5YcGlFUnVVIiwicmVzb3VyY2UiOiJhcm46YXdzOml2czpldS1jZW50cmFsLTE6MTQ1NzIzNjg2MjQ2OnN0YWdlL1F2dEJ3SVRTOVhKMyIsInRvcGljIjoiUXZ0QndJVFM5WEozIiwiZXZlbnRzX3VybCI6IndzczovL2dsb2JhbC5lZXZlZS5ldmVudHMubGl2ZS12aWRlby5uZXQiLCJ3aGlwX3VybCI6Imh0dHBzOi8vNzhmYzU2ZmVkYjI0Lmdsb2JhbC1ibS53aGlwLmxpdmUtdmlkZW8ubmV0IiwidXNlcl9pZCI6IkJhbGF6cyIsImNhcGFiaWxpdGllcyI6eyJhbGxvd19wdWJsaXNoIjp0cnVlLCJhbGxvd19zdWJzY3JpYmUiOnRydWV9LCJ2ZXJzaW9uIjoiMC4wIn0.MGQCMCToYOUcmym68_U30PQmsCcxfAS2G5_Mbl0mKftmg7qvTiKkGAYyQ-r4qejUMhSemQIwGYjErUP8oOilHLazAJEXWSgpKsUcWTGL59saWDWLnDZQqmNUZ5o-dBFEdy6uaSh7"
+    val TOKEN = ""
     var audioDevice: AudioDevice? = null
     lateinit var deviceDiscovery: DeviceDiscovery
     var publishStreams: ArrayList<LocalStageStream> = ArrayList()
     private var stage: Stage? = null
 
-//    private val NUMBER_OF_CHANNELS = 1
-//    private val AUDIO_FORMAT_NR_OF_BYTES = 2
+    private val NUMBER_OF_CHANNELS = 1
+    private val AUDIO_FORMAT_NR_OF_BYTES = 2
 
     private val stageStrategy = object : Stage.Strategy {
         override fun stageStreamsToPublishForParticipant(
@@ -70,12 +78,16 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
+    // SwitchboardSDK
+    val audioGraph = AudioGraph()
+    val echoNode = EchoNode()
+
+
     private val mainScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
     private var presentationTimeInUs:Double = 0.0
 
     lateinit var byteBuffer: ByteBuffer
 
-    // Amazon IVS Requires to use the thread where the BroadcastSession was created
     private fun launchMain(block: suspend CoroutineScope.() -> Unit) = mainScope.launch(
         context = CoroutineExceptionHandler { _, e -> Log.d("Launch", "Coroutine failed ${e.localizedMessage}") },
         block = block
@@ -98,6 +110,56 @@ class MainActivity : AppCompatActivity() {
         checkPermissions()
         initializeRecorder()
         initIVS()
+        initAudioGraph()
+    }
+
+    private fun initAudioGraph() {
+        echoNode.isEnabled = true
+        audioGraph.addNode(echoNode)
+        audioGraph.connect(audioGraph.inputNode, echoNode)
+        audioGraph.connect(echoNode, audioGraph.outputNode)
+        audioGraph.start()
+    }
+
+    fun processByteArray(inByteArray: ByteArray, outByteArray: ByteArray, nrOfBytesToProcess: Int) {
+
+        val inFloatArray = convertInt16ByteArrayToFloat(inByteArray)
+        val numberOfFramesToProcess = nrOfBytesToProcess / (NUMBER_OF_CHANNELS * AUDIO_FORMAT_NR_OF_BYTES)
+
+        val inAudioData = AudioData(NUMBER_OF_CHANNELS, numberOfFramesToProcess)
+        val outAudioData = AudioData(NUMBER_OF_CHANNELS, numberOfFramesToProcess)
+        val inAudioBuffer = AudioBuffer(NUMBER_OF_CHANNELS, numberOfFramesToProcess, false, sampleRate, inAudioData)
+        val outAudioBuffer = AudioBuffer(NUMBER_OF_CHANNELS, numberOfFramesToProcess, false, sampleRate, outAudioData)
+
+        inAudioBuffer.copyFrom(inFloatArray, numberOfFramesToProcess * NUMBER_OF_CHANNELS)
+        processAudioBuffer(inAudioBuffer, outAudioBuffer)
+
+        for (i in inFloatArray.indices) {
+            // TODO: handle stereo if needed
+            val floatSample = outAudioBuffer.getSample(0, i)
+            val int16Sample = (floatSample * 32767.0f).toInt()
+            outByteArray[i * 2] = (int16Sample and 0xFF).toByte()              // Lower byte
+            outByteArray[i * 2 + 1] = ((int16Sample shr 8) and 0xFF).toByte()  // Higher byte
+        }
+    }
+
+    fun convertInt16ByteArrayToFloat(byteArray: ByteArray): FloatArray {
+        val floatArray = FloatArray(byteArray.size / 2)
+        for (i in byteArray.indices step 2) {
+            val int16Value = (byteArray[i + 1].toInt() shl 8) or (byteArray[i].toInt() and 0xFF)
+            floatArray[i / 2] = int16Value / 32768.0f
+        }
+        return floatArray
+    }
+
+
+
+    fun processAudioBuffer(inAudioBuffer: AudioBuffer, outAudioBuffer: AudioBuffer) {
+        val inAudioBus = AudioBus(inAudioBuffer)
+        val inAudioBusList = AudioBusList(inAudioBus)
+        val outAudioBus = AudioBus(outAudioBuffer)
+        val outAudioBusList = AudioBusList(outAudioBus)
+        audioGraph.process(inAudioBusList, outAudioBusList)
     }
 
     private fun initIVS() {
@@ -170,7 +232,7 @@ class MainActivity : AppCompatActivity() {
     private fun startRecording() {
         recorder.startRecording()
         isRecording = true
-        recordingThread = Thread { sendAudioToIVS() }
+        recordingThread = Thread { processRecording() }
         recordingThread.start()
         recordButton.text = "Stop Recording"
     }
@@ -187,12 +249,15 @@ class MainActivity : AppCompatActivity() {
         recordButton.text = "Start Recording"
     }
 
-    private fun sendAudioToIVS() {
+    private fun processRecording() {
+        // assign size so that bytes are read in in chunks inferior to AudioRecord internal buffer size
         val byteArray = ByteArray(bufferSizeRecorder / 2)
+        val processedByteArray = ByteArray(bufferSizeRecorder / 2)
         while (isRecording) {
             val readBytes = recorder.read(byteArray, 0, byteArray.size)
             if (readBytes > 0) {
-                sendAudioToIVS(byteArray, readBytes)
+                processByteArray(byteArray, processedByteArray, readBytes)
+                sendAudioToIVS(processedByteArray, readBytes)
             }
         }
     }
