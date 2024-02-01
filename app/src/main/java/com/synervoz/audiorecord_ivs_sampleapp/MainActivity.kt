@@ -108,9 +108,6 @@ class MainActivity : AppCompatActivity() {
         }
 
         checkPermissions()
-        initializeRecorder()
-        initIVS()
-        initAudioGraph()
     }
 
     private fun initAudioGraph() {
@@ -201,6 +198,11 @@ class MainActivity : AppCompatActivity() {
     private fun checkPermissions() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.RECORD_AUDIO), 1)
+        } else {
+            // Permission already granted, initialize everything here
+            initializeRecorder()
+            initIVS()
+            initAudioGraph()
         }
     }
 
@@ -266,6 +268,19 @@ class MainActivity : AppCompatActivity() {
         super.onDestroy()
         if (::recorder.isInitialized) {
             recorder.release()
+        }
+    }
+
+    override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+        if (requestCode == 1 && grantResults.isNotEmpty() && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+            // RECORD_AUDIO permission was granted, initialize everything here
+            initializeRecorder()
+            initIVS()
+            initAudioGraph()
+        } else {
+            // Handle the case where the user denies the permission
+            // You might want to close the app or disable certain features
         }
     }
 }
