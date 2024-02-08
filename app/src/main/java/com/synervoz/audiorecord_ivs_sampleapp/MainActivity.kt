@@ -23,6 +23,8 @@ import com.synervoz.switchboard.sdk.audiograph.AudioBus
 import com.synervoz.switchboard.sdk.audiograph.AudioBusList
 import com.synervoz.switchboard.sdk.audiograph.AudioData
 import com.synervoz.switchboard.sdk.audiograph.AudioGraph
+import com.synervoz.switchboard.sdk.audiographnodes.MonoToMultiChannelNode
+import com.synervoz.switchboard.sdk.audiographnodes.MultiChannelToMonoNode
 import com.synervoz.switchboardsuperpowered.audiographnodes.EchoNode
 import com.synervoz.switchboardsuperpowered.audiographnodes.ReverbNode
 import kotlinx.coroutines.CoroutineExceptionHandler
@@ -31,7 +33,6 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
 import java.nio.ByteBuffer
-import java.nio.ByteOrder
 
 
 class MainActivity : AppCompatActivity() {
@@ -80,7 +81,9 @@ class MainActivity : AppCompatActivity() {
 
     // SwitchboardSDK
     val audioGraph = AudioGraph()
-    val echoNode = EchoNode()
+    val reverbNode = ReverbNode()
+    val monoToMultiChannelNode = MonoToMultiChannelNode()
+    val multiChannelToMonoNode = MultiChannelToMonoNode()
 
 
     private val mainScope = CoroutineScope(Dispatchers.Main + SupervisorJob())
@@ -111,10 +114,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun initAudioGraph() {
-        echoNode.isEnabled = true
-        audioGraph.addNode(echoNode)
-        audioGraph.connect(audioGraph.inputNode, echoNode)
-        audioGraph.connect(echoNode, audioGraph.outputNode)
+        reverbNode.isEnabled = true
+
+        audioGraph.addNode(reverbNode)
+        audioGraph.addNode(monoToMultiChannelNode)
+        audioGraph.addNode(multiChannelToMonoNode)
+
+        audioGraph.connect(audioGraph.inputNode, monoToMultiChannelNode)
+        audioGraph.connect(monoToMultiChannelNode, reverbNode)
+        audioGraph.connect(reverbNode, multiChannelToMonoNode)
+        audioGraph.connect(multiChannelToMonoNode, audioGraph.outputNode)
+
         audioGraph.start()
     }
 
@@ -215,13 +225,6 @@ class MainActivity : AppCompatActivity() {
                 Manifest.permission.RECORD_AUDIO
             ) != PackageManager.PERMISSION_GRANTED
         ) {
-            // TODO: Consider calling
-            //    ActivityCompat#requestPermissions
-            // here to request the missing permissions, and then overriding
-            //   public void onRequestPermissionsResult(int requestCode, String[] permissions,
-            //                                          int[] grantResults)
-            // to handle the case where the user grants the permission. See the documentation
-            // for ActivityCompat#requestPermissions for more details.
             return
         }
         recorder = AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT, bufferSizeRecorder)
@@ -253,8 +256,8 @@ class MainActivity : AppCompatActivity() {
 
     private fun processRecording() {
         // assign size so that bytes are read in in chunks inferior to AudioRecord internal buffer size
-        val byteArray = ByteArray(bufferSizeRecorder / 2)
-        val processedByteArray = ByteArray(bufferSizeRecorder / 2)
+        val byteArray = ByteArray(bufferSizeRecorder)
+        val processedByteArray = ByteArray(bufferSizeRecorder )
         while (isRecording) {
             val readBytes = recorder.read(byteArray, 0, byteArray.size)
             if (readBytes > 0) {
