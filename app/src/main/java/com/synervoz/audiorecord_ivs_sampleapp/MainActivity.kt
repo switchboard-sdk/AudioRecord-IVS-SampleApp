@@ -185,9 +185,6 @@ class MainActivity : AppCompatActivity() {
 
         val microphoneStream = AudioLocalStageStream(audioDevice!!)
         publishStreams.add(microphoneStream)
-
-        stage = Stage(this, TOKEN.trim(), stageStrategy)
-        stage?.join()
     }
 
     fun sendAudioToIVS(data: ByteArray?, nrOfBytes: Int) {
@@ -235,11 +232,17 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun startRecording() {
-        recorder.startRecording()
-        isRecording = true
-        recordingThread = Thread { processRecording() }
-        recordingThread.start()
-        recordButton.text = "Stop Recording"
+        if (TOKEN.isBlank()) {
+            DialogHelper.create(this, "Please add your client token in settings!")
+        } else {
+            stage = Stage(this, TOKEN.trim(), stageStrategy)
+            stage?.join()
+            recorder.startRecording()
+            isRecording = true
+            recordingThread = Thread { processRecording() }
+            recordingThread.start()
+            recordButton.text = "Stop Recording"
+        }
     }
 
     private fun stopRecording() {
