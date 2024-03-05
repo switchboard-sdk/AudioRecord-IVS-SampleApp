@@ -33,6 +33,10 @@ android {
     kotlinOptions {
         jvmTarget = "1.8"
     }
+
+    buildFeatures {
+        viewBinding = true
+    }
 }
 
 dependencies {
@@ -43,6 +47,8 @@ dependencies {
     implementation("androidx.constraintlayout:constraintlayout:2.1.4")
 
     implementation( "com.amazonaws:ivs-broadcast:1.13.4:stages@aar")
+    implementation("androidx.fragment:fragment-ktx:1.6.2")
+
 
     implementation(files("../libs/SwitchboardSDK.aar"))
     implementation(files("../libs/SwitchboardSuperpowered.aar"))

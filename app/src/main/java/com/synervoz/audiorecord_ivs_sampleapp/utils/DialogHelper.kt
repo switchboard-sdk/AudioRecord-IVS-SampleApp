@@ -1,4 +1,4 @@
-package com.synervoz.audiorecord_ivs_sampleapp
+package com.synervoz.audiorecord_ivs_sampleapp.utils
 
 import android.content.Context
 import android.content.DialogInterface
