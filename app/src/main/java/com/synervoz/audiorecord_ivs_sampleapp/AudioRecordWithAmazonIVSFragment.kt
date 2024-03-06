@@ -48,7 +48,6 @@ class AudioRecordWithAmazonIVSFragment : Fragment() {
     private lateinit var recorder: AudioRecord
     private var isRecording = false
     private lateinit var recordingThread: Thread
-    private lateinit var recordButton: Button
     private lateinit var binding: FragmentAudioRecordWithAmazonIvsBinding
 
     // ivs
