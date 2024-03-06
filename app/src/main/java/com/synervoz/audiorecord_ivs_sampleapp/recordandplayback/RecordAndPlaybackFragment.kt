@@ -38,6 +38,12 @@ class RecordAndPlaybackFragment: Fragment() {
             }
         }
 
+        binding.reverbSwitch.isChecked = audioEngine.reverbNode.isEnabled
+
+        binding.reverbSwitch.setOnCheckedChangeListener { _, isChecked ->
+            audioEngine.reverbNode.isEnabled = isChecked
+        }
+
         return binding.root
     }
 }

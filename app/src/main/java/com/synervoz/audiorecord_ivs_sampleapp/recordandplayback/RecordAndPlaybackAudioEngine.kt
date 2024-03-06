@@ -67,7 +67,6 @@ class RecordAndPlaybackAudioEngine(val context: Context) {
         audioGraph.connect(reverbNode, multiChannelToMonoNode)
         audioGraph.connect(multiChannelToMonoNode, recorderNode)
 
-        recorderNode.start()
         audioGraph.start()
 
         audioPlaybackGraph.addNode(audioPlayerNode)
@@ -106,6 +105,7 @@ class RecordAndPlaybackAudioEngine(val context: Context) {
 
 
     fun startRecording() {
+        recorderNode.start()
         recorder.startRecording()
         isRecording = true
         recordingThread = Thread { processRecording() }
@@ -123,8 +123,7 @@ class RecordAndPlaybackAudioEngine(val context: Context) {
 
         recordingFilePath = context.getExternalFilesDir(null)?.absolutePath +  "/test_recording"+ "." + currentFormat.fileExtension
         recorderNode.stop(recordingFilePath, currentFormat)
-        val loaded = audioPlayerNode.load(recordingFilePath, currentFormat)
-        Logger.debug("Recorded file loaded: $loaded")
+        audioPlayerNode.load(recordingFilePath, currentFormat)
     }
 
     private fun processRecording() {
